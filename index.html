@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>คำนวณสุขาภิบาล</title>
+  <meta name="description" content="คำนวณขนาดท่อประปา ถังเก็บน้ำ และเครื่องสูบน้ำ (Hunter's Curve, Water Factor, Hazen-Williams, Motor Sizing)">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d4ed8'/%3E%3Cpath d='M16 6c-4 5.5-7 9.2-7 12.5a7 7 0 0 0 14 0C23 15.2 20 11.5 16 6z' fill='white'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f3f5f8;
+      --surface: #ffffff;
+      --surface-2: #f7f9fb;
+      --border: #e2e7ee;
+      --border-strong: #cbd3de;
+      --text: #0f172a;
+      --muted: #5b6678;
+      --faint: #8a94a6;
+      --accent: #1d4ed8;
+      --accent-soft: #e8efff;
+      --accent-text: #1e40af;
+      --ok: #047857;
+      --ok-soft: #e6f6ef;
+      --warn: #b45309;
+      --warn-soft: #fdf3e2;
+      --rwst: #059669;
+      --uwst: #0d9488;
+      --pump: #d97706;
+      --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 1px rgba(15, 23, 42, .03);
+      --radius: 12px;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0d1117;
+        --surface: #151b24;
+        --surface-2: #1b2330;
+        --border: #263041;
+        --border-strong: #354257;
+        --text: #e6ebf2;
+        --muted: #a0abbd;
+        --faint: #6f7b8f;
+        --accent: #5b8cff;
+        --accent-soft: #1a2747;
+        --accent-text: #a9c1ff;
+        --ok: #34d399;
+        --ok-soft: #10302a;
+        --warn: #fbbf24;
+        --warn-soft: #362a12;
+        --rwst: #34d399;
+        --uwst: #2dd4bf;
+        --pump: #f59e0b;
+        --shadow: none;
+        color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0d1117;
+      --surface: #151b24;
+      --surface-2: #1b2330;
+      --border: #263041;
+      --border-strong: #354257;
+      --text: #e6ebf2;
+      --muted: #a0abbd;
+      --faint: #6f7b8f;
+      --accent: #5b8cff;
+      --accent-soft: #1a2747;
+      --accent-text: #a9c1ff;
+      --ok: #34d399;
+      --ok-soft: #10302a;
+      --warn: #fbbf24;
+      --warn-soft: #362a12;
+      --rwst: #34d399;
+      --uwst: #2dd4bf;
+      --pump: #f59e0b;
+      --shadow: none;
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Sarabun', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    button, input, select { font: inherit; color: inherit; }
+    h1, h2, h3 { margin: 0; line-height: 1.3; }
+    [hidden] { display: none !important; }
+
+    /* ---------- Top bar ---------- */
+    .topbar {
+      position: sticky; top: 0; z-index: 20;
+      background: color-mix(in srgb, var(--surface) 92%, transparent);
+      backdrop-filter: saturate(1.4) blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-inner {
+      max-width: 1240px; margin: 0 auto; padding: 10px 16px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .brand-logo {
+      width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+      background: var(--accent); color: #fff;
+      display: grid; place-items: center;
+    }
+    .brand h1 { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .brand p { margin: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      height: 36px; padding: 0 14px; border-radius: 9px;
+      border: 1px solid var(--border-strong); background: var(--surface);
+      font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap;
+      transition: background .15s, border-color .15s;
+    }
+    .btn:hover { background: var(--surface-2); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent); filter: brightness(1.08); }
+    .btn svg { width: 16px; height: 16px; }
+    .btn-icon { width: 36px; padding: 0; }
+    .btn:focus-visible, input:focus-visible, select:focus-visible, .seg label:focus-within {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
+
+    /* ---------- Layout ---------- */
+    .layout {
+      max-width: 1240px; margin: 0 auto; padding: 20px 16px 96px;
+      display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start;
+    }
+    .inputs { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+    .summary { position: sticky; top: 74px; display: flex; flex-direction: column; gap: 12px; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+    .card-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+    }
+    .card-title { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; }
+    .step {
+      width: 24px; height: 24px; border-radius: 7px; flex-shrink: 0;
+      background: var(--accent-soft); color: var(--accent-text);
+      display: grid; place-items: center; font-size: 13px; font-weight: 700;
+    }
+    .card-body { padding: 16px 18px; }
+    .hint { font-size: 12px; color: var(--faint); margin-top: 4px; }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+      background: var(--surface-2); color: var(--muted); border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .chip-accent { background: var(--accent-soft); color: var(--accent-text); border-color: transparent; }
+    .chip-ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+    .chip-warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+
+    /* ---------- Form ---------- */
+    .grid { display: grid; gap: 14px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .field label, .field .label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+    .input-wrap { position: relative; }
+    .input, select.input {
+      width: 100%; height: 40px; padding: 0 12px;
+      background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 9px;
+      font-size: 15px; transition: border-color .15s, background .15s;
+    }
+    .input:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+    .input[readonly] { color: var(--muted); cursor: default; }
+    .input.has-unit { padding-right: 52px; }
+    .unit {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      font-size: 13px; color: var(--faint); pointer-events: none;
+    }
+    select.input {
+      appearance: none; padding-right: 36px; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a94a6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+    }
+    input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+
+    .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 9px; padding: 3px; width: 100%; }
+    .seg label { flex: 1; position: relative; }
+    .seg input { position: absolute; opacity: 0; pointer-events: none; }
+    .seg span {
+      display: block; text-align: center; padding: 6px 8px; border-radius: 7px;
+      font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; transition: background .15s, color .15s;
+    }
+    .seg input:checked + span { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+    .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
+    .switch input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; cursor: pointer; }
+
+    /* ---------- Fixtures ---------- */
+    .fixtures { display: flex; flex-direction: column; margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .fixture {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px;
+      padding: 10px 14px; border-top: 1px solid var(--border);
+    }
+    .fixture:first-child { border-top: 0; }
+    .fixture.active { background: var(--accent-soft); }
+    .fixture-name { font-weight: 500; }
+    .fixture-meta { font-size: 12px; color: var(--faint); display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+    .tag { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 5px; }
+    .tag-ft { background: var(--accent-soft); color: var(--accent-text); }
+    .tag-fv { background: var(--warn-soft); color: var(--warn); }
+    .fixture.active .tag-ft { background: var(--surface); }
+    .stepper { display: inline-flex; align-items: center; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); overflow: hidden; }
+    .stepper button {
+      width: 36px; height: 36px; border: 0; background: transparent; cursor: pointer;
+      font-size: 18px; color: var(--muted); display: grid; place-items: center;
+    }
+    .stepper button:hover { background: var(--surface-2); color: var(--text); }
+    .stepper input {
+      width: 52px; height: 36px; border: 0; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+      text-align: center; background: transparent; font-weight: 600; font-size: 15px;
+    }
+    .stepper input:focus { outline: none; background: var(--surface-2); }
+
+    .note { font-size: 12.5px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; margin-top: 14px; }
+    .note ul { margin: 0; padding-left: 18px; }
+
+    /* ---------- Summary ---------- */
+    .summary-head { padding: 14px 16px 10px; display: flex; align-items: center; justify-content: space-between; }
+    .summary-head h2 { font-size: 15px; font-weight: 700; }
+    .empty { padding: 28px 18px 32px; text-align: center; color: var(--muted); font-size: 14px; }
+    .empty svg { width: 36px; height: 36px; color: var(--faint); margin-bottom: 8px; }
+    .kpi-group { padding: 12px 16px; border-top: 1px solid var(--border); }
+    .kpi-label-row { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 8px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .kpi-hero { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .kpi-hero .big { font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+    .kpi-hero .sub { color: var(--muted); font-size: 14px; }
+    .kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; padding: 3px 0; }
+    .kv span:first-child { color: var(--muted); }
+    .kv span:last-child { font-weight: 600; text-align: right; }
+    .bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; display: flex; margin: 8px 0 4px; border: 1px solid var(--border); }
+    .bar > div { height: 100%; transition: width .3s; }
+    .legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .summary-foot { padding: 12px 16px 16px; border-top: 1px solid var(--border); }
+    .summary-foot .btn { width: 100%; }
+
+    /* ---------- Report ---------- */
+    .report { max-width: 1240px; margin: 0 auto; padding: 0 16px 32px; }
+    .report .card-head { background: var(--surface-2); border-radius: var(--radius) var(--radius) 0 0; }
+    .report-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .rsec { padding: 18px; border-top: 1px solid var(--border); break-inside: avoid; }
+    .rsec:first-of-type { border-top: 0; }
+    .rsec h3 { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .rsec h3 .sub { font-weight: 400; color: var(--faint); font-size: 12px; }
+    .badge-letter { width: 22px; height: 22px; border-radius: 6px; color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+    .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .tiles.t3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .tile { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface-2); min-width: 0; }
+    .tile .t-label { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .tile .t-value { font-size: 18px; font-weight: 700; margin-top: 2px; overflow-wrap: anywhere; }
+    .tile .t-sub { font-size: 12px; color: var(--faint); overflow-wrap: anywhere; }
+    .tile.hl { border-color: var(--accent); background: var(--accent-soft); }
+    .table-wrap { border: 1px solid var(--border); border-radius: 10px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    th, td { padding: 9px 12px; text-align: left; border-top: 1px solid var(--border); vertical-align: top; }
+    thead th { border-top: 0; background: var(--surface-2); font-size: 12px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+    tfoot td { background: var(--surface-2); font-weight: 700; }
+    .num { text-align: right; white-space: nowrap; }
+    .hl-col { background: var(--warn-soft); font-weight: 700; }
+    .print-only { display: none; }
+
+    /* ---------- Mobile bottom bar ---------- */
+    .mobilebar {
+      display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+      background: var(--surface); border-top: 1px solid var(--border);
+      padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+      align-items: center; justify-content: space-between; gap: 12px;
+      box-shadow: 0 -4px 16px rgba(0,0,0,.06);
+    }
+    .mobilebar .mb-stats { display: flex; gap: 16px; font-size: 13px; min-width: 0; }
+    .mobilebar .mb-stats div { min-width: 0; }
+    .mobilebar .mb-stats small { display: block; color: var(--faint); font-size: 11px; }
+    .mobilebar .mb-stats b { white-space: nowrap; }
+
+    /* ---------- Responsive ---------- */
+    button, .btn, .seg span, .switch { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    .card, .rsec, #summary, #report { scroll-margin-top: 68px; }
+    .title-short { display: none; }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: minmax(0, 1fr); padding-bottom: 24px; }
+      .summary { position: static; }
+      .mobilebar { display: flex; }
+      .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+    }
+    @media (max-width: 640px) {
+      /* 16px inputs prevent iOS auto-zoom on focus */
+      .input, select.input, .stepper input { font-size: 16px; }
+      .input { height: 44px; }
+
+      .topbar-inner { padding: 8px 12px; gap: 8px; }
+      .brand { gap: 8px; }
+      .brand-logo { width: 30px; height: 30px; border-radius: 8px; }
+      .brand h1 { font-size: 16px; }
+      .brand p { display: none; }
+      .title-full { display: none; }
+      .title-short { display: inline; }
+      .actions { gap: 6px; }
+      .btn-label { display: none; }
+      .btn { height: 40px; padding: 0 10px; }
+      .btn-icon, .actions .btn { width: 40px; padding: 0; }
+
+      .layout { padding: 12px 12px 24px; gap: 12px; }
+      .inputs { gap: 12px; }
+      .report { padding: 0 12px 24px; }
+      .card-head { padding: 12px 14px; }
+      .card-title { font-size: 15px; }
+      .card-body, .rsec { padding: 14px; }
+
+      /* short numeric fields side-by-side; odd last field spans full row */
+      .grid { gap: 12px; }
+      .grid-2 { grid-template-columns: minmax(0, 1fr); }
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-3 > .field:last-child:nth-child(odd) { grid-column: 1 / -1; }
+      .field label, .field .label { font-size: 12.5px; }
+      .hint { font-size: 11.5px; }
+      .input.has-unit { padding-right: 44px; }
+      .unit { right: 10px; font-size: 12px; }
+
+      .switch { padding: 6px 0; }
+      .switch input { width: 20px; height: 20px; }
+      .seg span { padding: 9px 8px; font-size: 15px; }
+
+      .fixture { padding: 10px 12px; gap: 10px; }
+      .fixture-name { font-size: 14.5px; }
+      .stepper button { width: 42px; height: 42px; font-size: 20px; }
+      .stepper input { width: 48px; height: 42px; }
+
+      .kpi-hero .big { font-size: 26px; }
+      .rsec h3 { flex-wrap: wrap; }
+      .rsec h3 .sub { flex-basis: 100%; padding-left: 30px; margin-top: -4px; }
+      .tiles { gap: 8px; }
+      .tiles.t3 { grid-template-columns: minmax(0, 1fr); }
+      .tile .t-value { font-size: 16px; }
+
+      /* tables become stacked cards */
+      table.stack thead { display: none; }
+      table.stack, table.stack tbody, table.stack tfoot { display: block; }
+      table.stack tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 12px; border-top: 1px solid var(--border); }
+      table.stack tbody tr:first-child { border-top: 0; }
+      table.stack td { display: flex; justify-content: space-between; gap: 12px; padding: 0; border: 0; text-align: right; grid-column: 1 / -1; background: transparent; }
+      table.stack td::before { content: attr(data-label); color: var(--muted); font-family: 'Sarabun', sans-serif; font-weight: 400; text-align: left; }
+      table.stack td.cell-title { font-weight: 700; font-size: 14.5px; justify-content: flex-start; }
+      table.stack td.cell-title::before { display: none; }
+      table.stack td.hl-col { color: var(--warn); }
+      table.stack tfoot tr { background: var(--surface-2); }
+      table.stack tfoot td:empty { display: none; }
+      table.kv-table tr { display: block; padding: 9px 12px; border-top: 1px solid var(--border); }
+      table.kv-table tr:first-child { border-top: 0; }
+      table.kv-table td { display: block; width: auto !important; padding: 0; border: 0; }
+      table.kv-table td:first-child { color: var(--muted); font-size: 12.5px; }
+      .table-wrap { overflow-x: visible; }
+    }
+    @media (max-width: 340px) {
+      .grid-3 { grid-template-columns: minmax(0, 1fr); }
+      .mobilebar .mb-stats { gap: 10px; }
+    }
+
+    /* ---------- Print ---------- */
+    @media print {
+      :root { --bg: #fff; --surface: #fff; --surface-2: #f6f7f9; --text: #000; --muted: #333; --faint: #555; --shadow: none; }
+      body { font-size: 12px; background: #fff; }
+      .topbar, .layout, .mobilebar, .no-print { display: none !important; }
+      .report { padding: 0; max-width: none; }
+      .print-only { display: block; }
+      .card { border: 0; }
+      .tiles { grid-template-columns: repeat(4, 1fr) !important; }
+      .tiles.t3 { grid-template-columns: repeat(3, 1fr) !important; }
+      .table-wrap { overflow: visible; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-logo" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c-3.2 4.3-6.5 8.3-6.5 12a6.5 6.5 0 0 0 13 0c0-3.7-3.3-7.7-6.5-12z"/></svg>
+        </div>
+        <div style="min-width:0">
+          <h1><span class="title-full">คำนวณระบบสุขาภิบาล</span><span class="title-short">สุขาภิบาล</span></h1>
+          <p>ท่อประปา • ถังเก็บน้ำ • เครื่องสูบน้ำ</p>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-icon" id="themeBtn" type="button" title="สลับโหมดสว่าง/มืด" aria-label="สลับโหมดสว่าง/มืด">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+        <button class="btn" id="resetBtn" type="button" title="ล้างค่าทั้งหมด">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          <span class="btn-label">เริ่มใหม่</span>
+        </button>
+        <button class="btn btn-primary" id="printBtn" type="button" title="พิมพ์รายงาน">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          <span class="btn-label">พิมพ์รายงาน</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ================= INPUTS ================= -->
+    <div class="inputs">
+
+      <!-- Step 1: Building & fixtures -->
+      <section class="card" aria-labelledby="h-step1">
+        <div class="card-head">
+          <h2 class="card-title" id="h-step1"><span class="step">1</span>อาคารและสุขภัณฑ์</h2>
+          <span class="chip chip-accent mono" id="fixtureTotalChip">0 ชิ้น • 0.00 WSFU</span>
+        </div>
+        <div class="card-body">
+          <div class="field">
+            <label for="buildingSelect">ประเภทอาคาร</label>
+            <select id="buildingSelect" class="input"></select>
+          </div>
+          <div class="fixtures" id="fixtureList"></div>
+          <div class="hint">FT = Flush Tank, FV = Flush Valve • ค่า WSFU ใช้น้ำเย็น (Cold)</div>
+        </div>
+      </section>
+
+      <!-- Step 2: Piping -->
+      <section class="card" aria-labelledby="h-step2">
+        <div class="card-head">
+          <h2 class="card-title" id="h-step2"><span class="step">2</span>ระบบท่อประปา</h2>
+          <span class="chip" id="wfRuleChip">ตาราง 2.5</span>
+        </div>
+        <div class="card-body">
+          <div class="grid grid-3">
+            <div class="field">
+              <label for="pipeLength">ความยาวท่อรวม (L)</label>
+              <div class="input-wrap">
+                <input type="number" id="pipeLength" class="input has-unit mono" value="80" min="1" step="any" inputmode="decimal">
+                <span class="unit">m</span>
+              </div>
+              <div class="hint">Hazen-Williams, C = 130</div>
+            </div>
+            <div class="field">
+              <label for="designVelocity">ความเร็วออกแบบ (v)</label>
+              <div class="input-wrap">
+                <input type="number" id="designVelocity" class="input has-unit mono" value="1.5" min="0.5" max="4" step="0.1" inputmode="decimal">
+                <span class="unit">m/s</span>
+              </div>
+              <div class="hint">ช่วงมาตรฐาน 1.2 – 2.4 m/s</div>
+            </div>
+            <div class="field">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <label for="waterFactorPercent" style="margin:0">Water Factor</label>
+                <label class="switch"><input type="checkbox" id="wfManual">กำหนดเอง</label>
+              </div>
+              <div class="input-wrap">
+                <input type="number" id="waterFactorPercent" class="input has-unit mono" value="100" min="10" max="100" step="1" readonly inputmode="decimal">
+                <span class="unit">%</span>
+              </div>
+              <div class="hint" id="wfDesc">อัตโนมัติตามตาราง 2.5</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 3: Tanks -->
+      <section class="card" aria-labelledby="h-step3">
+        <div class="card-head">
+          <h2 class="card-title" id="h-step3"><span class="step">3</span>ถังเก็บน้ำ</h2>
+          <span class="chip">มาตรฐาน วสท.</span>
+        </div>
+        <div class="card-body">
+          <div class="grid grid-3">
+            <div class="field">
+              <label for="buildingUsers">จำนวนผู้ใช้อาคาร (P)</label>
+              <div class="input-wrap">
+                <input type="number" id="buildingUsers" class="input has-unit mono" value="50" min="1" step="1" inputmode="numeric">
+                <span class="unit">คน</span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="waterDemand">อัตราการใช้น้ำ</label>
+              <div class="input-wrap">
+                <input type="number" id="waterDemand" class="input has-unit mono" value="200" min="1" step="any" inputmode="decimal" style="padding-right:84px">
+                <span class="unit">ล./คน/วัน</span>
+              </div>
+              <div class="hint">ค่าเริ่มต้นปรับตามประเภทอาคาร</div>
+            </div>
+            <div class="field">
+              <label for="reserveDays">จำนวนวันสำรองน้ำ</label>
+              <div class="input-wrap">
+                <input type="number" id="reserveDays" class="input has-unit mono" value="2" min="0.1" step="0.5" inputmode="decimal">
+                <span class="unit">วัน</span>
+              </div>
+              <div class="hint">แนะนำ 1.0 – 2.0 วัน</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 4: Pumps -->
+      <section class="card" aria-labelledby="h-step4">
+        <div class="card-head">
+          <h2 class="card-title" id="h-step4"><span class="step">4</span>เครื่องสูบน้ำและมอเตอร์</h2>
+          <span class="chip">IEC / NEMA</span>
+        </div>
+        <div class="card-body">
+          <div class="grid grid-2">
+            <div class="field">
+              <span class="label">จำนวนปั๊มน้ำ</span>
+              <div class="seg" role="radiogroup" aria-label="จำนวนปั๊มน้ำ">
+                <label><input type="radio" name="pumpCount" value="2" checked><span>2 เครื่อง</span></label>
+                <label><input type="radio" name="pumpCount" value="3"><span>3 เครื่อง</span></label>
+              </div>
+            </div>
+            <div class="field">
+              <label for="efficiencyProfileSelect">ประสิทธิภาพปั๊ม (η)</label>
+              <select id="efficiencyProfileSelect" class="input"></select>
+            </div>
+          </div>
+          <div class="grid grid-3" style="margin-top:14px">
+            <div class="field">
+              <label for="dischargeHead">ความสูงฝั่งส่ง</label>
+              <div class="input-wrap">
+                <input type="number" id="dischargeHead" class="input has-unit mono" value="30" min="0" step="any" inputmode="decimal">
+                <span class="unit">m</span>
+              </div>
+              <div class="hint">Discharge Head</div>
+            </div>
+            <div class="field">
+              <label for="suctionHead">ระดับน้ำฝั่งดูด</label>
+              <div class="input-wrap">
+                <input type="number" id="suctionHead" class="input has-unit mono" value="2" min="0" step="any" inputmode="decimal">
+                <span class="unit">m</span>
+              </div>
+              <div class="hint">Suction Head</div>
+            </div>
+            <div class="field">
+              <label for="suctionLift">ระยะดูดลึก</label>
+              <div class="input-wrap">
+                <input type="number" id="suctionLift" class="input has-unit mono" value="0" min="0" step="any" inputmode="decimal">
+                <span class="unit">m</span>
+              </div>
+              <div class="hint">Suction Lift</div>
+            </div>
+          </div>
+          <div class="note">
+            <ul>
+              <li>ปั๊มแต่ละเครื่องใช้อัตราสูบ Qtp เต็มค่า (ไม่แบ่ง Q)</li>
+              <li>Total Head Loss (THL) ดึงจาก Head loss ของระบบท่อในขั้นตอนที่ 2 อัตโนมัติ</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= LIVE SUMMARY ================= -->
+    <aside class="summary" id="summary" aria-live="polite">
+      <div class="card">
+        <div class="summary-head">
+          <h2>ผลลัพธ์</h2>
+          <span class="chip" id="summaryStatus">รอข้อมูล</span>
+        </div>
+
+        <div class="empty" id="summaryEmpty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5c-3.2 4.3-6.5 8.3-6.5 12a6.5 6.5 0 0 0 13 0c0-3.7-3.3-7.7-6.5-12z"/></svg>
+          <div>เพิ่มจำนวนสุขภัณฑ์อย่างน้อย 1 ชิ้น<br>ผลลัพธ์จะคำนวณให้ทันที</div>
+        </div>
+
+        <div id="summaryBody" hidden>
+          <div class="kpi-group">
+            <div class="kpi-label-row"><span class="dot" style="background:var(--accent)"></span>ท่อประปา</div>
+            <div class="kpi-hero"><span class="big mono" id="sPipe">DN –</span><span class="sub mono" id="sPipeInch">–</span></div>
+            <div class="kv"><span>ความเร็ว</span><span class="mono" id="sVel">–</span></div>
+            <div class="kv"><span>อัตราการไหล (Qtp)</span><span class="mono" id="sFlow">–</span></div>
+            <div class="kv"><span>Head loss</span><span class="mono" id="sHl">–</span></div>
+          </div>
+
+          <div class="kpi-group">
+            <div class="kpi-label-row"><span class="dot" style="background:var(--rwst)"></span>ถังเก็บน้ำ</div>
+            <div class="kpi-hero"><span class="big mono" id="sVTotal">–</span><span class="sub">m³ รวม</span></div>
+            <div class="bar"><div id="sRwstBar" style="background:var(--rwst);width:30%"></div><div id="sUwstBar" style="background:var(--uwst);width:70%"></div></div>
+            <div class="legend">
+              <span><span class="dot" style="background:var(--rwst)"></span>ถังสูง <b class="mono" id="sRwst">–</b></span>
+              <span><span class="dot" style="background:var(--uwst)"></span>ถังใต้ดิน <b class="mono" id="sUwst">–</b></span>
+            </div>
+          </div>
+
+          <div class="kpi-group">
+            <div class="kpi-label-row"><span class="dot" style="background:var(--pump)"></span>เครื่องสูบน้ำ</div>
+            <div class="kpi-hero"><span class="big mono" id="sTdh">–</span><span class="sub">m TDH</span></div>
+            <div id="sPumps"></div>
+          </div>
+
+          <div class="summary-foot">
+            <a class="btn" href="#report">ดูรายงานฉบับเต็ม ↓</a>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ================= FULL REPORT ================= -->
+  <section class="report" id="report" hidden>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2 style="font-size:16px;font-weight:700">รายงานผลการคำนวณวิศวกรรมสุขาภิบาล</h2>
+          <div class="report-meta" id="rMeta">–</div>
+        </div>
+        <button class="btn no-print" type="button" onclick="window.print()">พิมพ์</button>
+      </div>
+
+      <!-- Inputs recap (useful on paper) -->
+      <div class="rsec">
+        <h3><span class="badge-letter" style="background:var(--muted)">i</span>ข้อมูลที่ใช้คำนวณ</h3>
+        <div class="table-wrap">
+          <table class="stack">
+            <thead><tr><th>รายการสุขภัณฑ์</th><th>ระบบ</th><th class="num">WSFU/ชิ้น</th><th class="num">จำนวน</th><th class="num">WSFU รวม</th></tr></thead>
+            <tbody id="rFixtures"></tbody>
+            <tfoot><tr><td colspan="3" class="cell-title">รวม</td><td class="num mono" id="rFixCount" data-label="จำนวน (ชิ้น)">–</td><td class="num mono" id="rFixWsfu" data-label="WSFU รวม">–</td></tr></tfoot>
+          </table>
+        </div>
+        <div class="tiles" style="margin:12px 0 0" id="rParams"></div>
+      </div>
+
+      <!-- A: Piping -->
+      <div class="rsec">
+        <h3><span class="badge-letter" style="background:var(--accent)">A</span>ระบบท่อประปาและการสูญเสียแรงดัน <span class="sub">Hunter's Curve • Hazen-Williams C=130</span></h3>
+        <div class="tiles">
+          <div class="tile"><div class="t-label">WSFU รวม</div><div class="t-value mono" id="rWsfu">–</div><div class="t-sub" id="rMainType">–</div></div>
+          <div class="tile"><div class="t-label">อัตราการไหล Qadj</div><div class="t-value mono" id="rFlowGpm">–</div><div class="t-sub mono" id="rFlowLps">–</div></div>
+          <div class="tile hl"><div class="t-label">ขนาดท่อที่แนะนำ</div><div class="t-value mono" id="rPipe">–</div><div class="t-sub mono" id="rPipeInch">–</div></div>
+          <div class="tile"><div class="t-label">ความเร็วในท่อ</div><div class="t-value mono" id="rVel">–</div><div class="t-sub" id="rVelStatus">–</div></div>
+        </div>
+        <div class="table-wrap">
+          <table class="kv-table">
+            <tbody>
+              <tr><td style="width:38%;border-top:0">Water Factor</td><td class="mono" style="border-top:0" id="rWf">–</td></tr>
+              <tr><td>Head loss ในท่อ (h<sub>f</sub>)</td><td class="mono" id="rHl">–</td></tr>
+              <tr><td>ความดันลดในระบบท่อ</td><td class="mono" id="rPl">–</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- B: Tanks -->
+      <div class="rsec">
+        <h3><span class="badge-letter" style="background:var(--rwst)">B</span>ถังเก็บน้ำ (RWST &amp; UWST) <span class="sub">มาตรฐานการสำรองน้ำ วสท.</span></h3>
+        <div class="tiles">
+          <div class="tile"><div class="t-label">ปริมาณใช้น้ำต่อวัน (QD<sub>avg</sub>)</div><div class="t-value mono" id="rQd">–</div><div class="t-sub mono" id="rQdL">–</div></div>
+          <div class="tile"><div class="t-label">ปริมาตรถังรวม (V<sub>total</sub>)</div><div class="t-value mono" id="rVt">–</div><div class="t-sub mono" id="rVtL">–</div></div>
+          <div class="tile"><div class="t-label">ถังสูงบนหลังคา (V<sub>RWST</sub>)</div><div class="t-value mono" id="rVr">–</div><div class="t-sub mono" id="rVrL">–</div></div>
+          <div class="tile"><div class="t-label">ถังเก็บน้ำใต้ดิน (V<sub>UWST</sub>)</div><div class="t-value mono" id="rVu">–</div><div class="t-sub mono" id="rVuL">–</div></div>
+        </div>
+        <div class="table-wrap">
+          <table class="kv-table">
+            <tbody>
+              <tr><td style="width:38%;border-top:0">สัดส่วน ถังสูง / ถังใต้ดิน</td><td class="mono" style="border-top:0" id="rRatio">–</td></tr>
+              <tr><td>อัตราสูบปั๊ม Qtp</td><td class="mono" id="rQtpLpm">–</td></tr>
+              <tr><td>อัตราใช้น้ำเฉลี่ยต่อสุขภัณฑ์</td><td class="mono" id="rFixRate">–</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- C: Pumps -->
+      <div class="rsec">
+        <h3><span class="badge-letter" style="background:var(--pump)">C</span>เครื่องสูบน้ำและมอเตอร์ <span class="sub">ตารางมอเตอร์มาตรฐาน IEC / NEMA</span></h3>
+        <div class="tiles t3">
+          <div class="tile"><div class="t-label">Total Static Head (TSH)</div><div class="t-value mono" id="rTsh">–</div><div class="t-sub">(Discharge + Lift) − Suction</div></div>
+          <div class="tile"><div class="t-label">Total Head Loss (THL)</div><div class="t-value mono" id="rThl">–</div><div class="t-sub">จาก Head loss ระบบท่อ</div></div>
+          <div class="tile hl"><div class="t-label">Total Dynamic Head (TDH)</div><div class="t-value mono" id="rTdh">–</div><div class="t-sub">TDH = TSH + THL</div></div>
+        </div>
+        <div class="table-wrap">
+          <table class="stack">
+            <thead>
+              <tr><th>เครื่องสูบน้ำ</th><th class="num">Qtp</th><th class="num">η</th><th class="num">กำลังคำนวณ</th><th class="num">มอเตอร์ขนาดเล็กกว่า</th><th class="num hl-col">มอเตอร์ที่แนะนำ</th></tr>
+            </thead>
+            <tbody id="rPumps" class="mono"></tbody>
+            <tfoot><tr><td colspan="3" class="cell-title">กำลังรวม (คำนวณ)</td><td class="num mono" id="rTotalPower" data-label="kW / HP">–</td><td colspan="2"></td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+    <p class="print-only" style="font-size:11px;color:#555;margin-top:8px" id="printDate"></p>
+  </section>
+
+  <!-- Mobile quick-result bar -->
+  <div class="mobilebar" id="mobilebar">
+    <div class="mb-stats">
+      <div><small>ท่อ</small><b class="mono" id="mPipe">–</b></div>
+      <div><small>ถังรวม</small><b class="mono" id="mTank">–</b></div>
+      <div><small>TDH</small><b class="mono" id="mTdh">–</b></div>
+    </div>
+    <a class="btn btn-primary" href="#summary">ดูผล</a>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. ตารางข้อมูลวิศวกรรม (จากไฟล์ Excel บทที่ 2 & 3)
+    // =========================================================================
+
+    // ตารางรายการสุขภัณฑ์ (WSFU)
+    const FIXTURE_DATABASE = {
+      "1":  { name: "โถส้วม (Flush Tank) – Private", cold_wsfu: 3.0, type: "FT" },
+      "2":  { name: "โถส้วม (Flush Valve) – Private", cold_wsfu: 6.0, type: "FV" },
+      "3":  { name: "โถส้วม (Flush Tank) – Public", cold_wsfu: 5.0, type: "FT" },
+      "4":  { name: "โถส้วม (Flush Valve) – Public", cold_wsfu: 10.0, type: "FV" },
+      "5":  { name: "อ่างล้างหน้า – Private", cold_wsfu: 0.75, type: "FT" },
+      "6":  { name: "อ่างล้างหน้า – Public", cold_wsfu: 1.5, type: "FT" },
+      "7":  { name: "ฝักบัวอาบน้ำ – Private", cold_wsfu: 1.5, type: "FT" },
+      "8":  { name: "ฝักบัวอาบน้ำ – Public", cold_wsfu: 3.0, type: "FT" },
+      "9":  { name: "โถปัสสาวะชาย (¾″ FV) – Public", cold_wsfu: 5.0, type: "FV" },
+      "10": { name: "อ่างล้างจาน – Private", cold_wsfu: 1.5, type: "FT" },
+    };
+
+    // ประเภทอาคาร — โรงพยาบาล (3) ใช้ตาราง 2.4, อาคารอื่นใช้ตาราง 2.5
+    const PUBLIC_KEYS = ["3", "4", "6", "8", "9"];
+    const PRIVATE_KEYS = ["1", "2", "5", "7", "10"];
+    const BUILDING_FIXTURES = {
+      "1": { name: "อพาร์ทเมนต์ / บ้านพักอาศัย", category: "Private", keys: PRIVATE_KEYS, defaultDemand: 200 },
+      "2": { name: "โรงแรม", category: "Public", keys: PUBLIC_KEYS, defaultDemand: 250 },
+      "3": { name: "โรงพยาบาล", category: "Public", keys: PUBLIC_KEYS, defaultDemand: 1000 },
+      "4": { name: "โรงเรียน / มหาวิทยาลัย", category: "Public", keys: PUBLIC_KEYS, defaultDemand: 50 },
+      "5": { name: "อาคารสำนักงาน", category: "Public", keys: PUBLIC_KEYS, defaultDemand: 50 },
+      "6": { name: "ห้างสรรพสินค้า / ศูนย์การค้า", category: "Public", keys: PUBLIC_KEYS, defaultDemand: 40 },
+      "7": { name: "ร้านอาหาร", category: "Public", keys: PUBLIC_KEYS, defaultDemand: 30 },
+      "8": { name: "โรงงาน / อาคารอุตสาหกรรม", category: "Public", keys: PUBLIC_KEYS, defaultDemand: 60 },
+      "9": { name: "หอพัก / คอนโดมิเนียม", category: "Private", keys: PRIVATE_KEYS, defaultDemand: 200 },
+    };
+
+    // ตารางที่ 2.3 Hunter's Curve: [WSFU, Flush Tank GPM, Flush Valve GPM]
+    const HUNTER_TABLE = [
+      [6, 5.0, 5.0], [8, 6.5, 6.5], [10, 8.0, 27.0], [12, 9.2, 28.6], [14, 10.4, 30.2],
+      [16, 11.6, 31.8], [18, 12.8, 33.4], [20, 14.0, 35.0], [25, 17.0, 38.0], [30, 20.0, 41.0],
+      [35, 22.5, 43.8], [40, 24.8, 46.5], [45, 27.0, 49.0], [50, 29.0, 51.5], [60, 32.0, 55.0],
+      [70, 35.0, 58.5], [80, 38.0, 62.0], [90, 41.0, 64.8], [100, 43.5, 67.5], [120, 48.0, 72.5],
+      [140, 52.5, 77.5], [160, 57.0, 82.5], [180, 61.0, 87.0], [200, 65.0, 91.5], [225, 70.0, 97.0],
+      [250, 75.0, 101.0], [275, 80.0, 105.5], [300, 85.0, 110.0], [400, 105.0, 126.0], [500, 125.0, 142.0],
+      [750, 170.0, 178.0], [1000, 208.0, 208.0], [1250, 240.0, 240.0], [1500, 267.0, 267.0], [1750, 294.0, 294.0],
+      [2000, 321.0, 321.0], [2250, 348.0, 348.0], [2500, 375.0, 375.0], [2750, 402.0, 402.0], [3000, 432.0, 432.0],
+      [4000, 525.0, 525.0], [5000, 593.0, 593.0], [6000, 643.0, 643.0], [7000, 685.0, 685.0], [8000, 718.0, 718.0],
+      [9000, 745.0, 745.0], [10000, 769.0, 769.0],
+    ];
+
+    // ตารางที่ 2.4 Hospital water factors
+    const WATER_FACTOR_TABLE_2_4 = [
+      { minFu: 0, maxFu: 400, percent: 100, minGpm: 0, label: "Up to 400 FU" },
+      { minFu: 401, maxFu: 600, percent: 90, minGpm: 130, label: "401 - 600 FU" },
+      { minFu: 601, maxFu: 1200, percent: 77, minGpm: 145, label: "601 - 1,200 FU" },
+      { minFu: 1201, maxFu: 1500, percent: 74, minGpm: 185, label: "1,201 - 1,500 FU" },
+      { minFu: 1501, maxFu: 2000, percent: 70, minGpm: 205, label: "1,501 - 2,000 FU" },
+      { minFu: 2001, maxFu: 2500, percent: 69, minGpm: 235, label: "2,001 - 2,500 FU" },
+      { minFu: 2501, maxFu: 3000, percent: 68, minGpm: 270, label: "2,501 - 3,000 FU" },
+      { minFu: 3001, maxFu: 4000, percent: 65, minGpm: 300, label: "3,001 - 4,000 FU" },
+      { minFu: 4001, maxFu: 5000, percent: 64, minGpm: 370, label: "4,001 - 5,000 FU" },
+      { minFu: 5001, maxFu: 6000, percent: 63, minGpm: 435, label: "5,001 - 6,000 FU" },
+      { minFu: 6001, maxFu: 8000, percent: 62, minGpm: 495, label: "6,001 - 8,000 FU" },
+      { minFu: 8001, maxFu: 10000, percent: 61, minGpm: 605, label: "8,001 - 10,000 FU" },
+      { minFu: 10001, maxFu: Infinity, percent: 60, minGpm: 725, label: "10,001+ FU" },
+    ];
+
+    // ตารางที่ 2.5 Office buildings, schools, and apartment water factors
+    const WATER_FACTOR_TABLE_2_5 = [
+      { minFu: 0, maxFu: 400, percent: 100, minGpm: 0, label: "Up to 400 FU" },
+      { minFu: 401, maxFu: 600, percent: 87, minGpm: 130, label: "401 - 600 FU" },
+      { minFu: 601, maxFu: 900, percent: 75, minGpm: 140, label: "601 - 900 FU" },
+      { minFu: 901, maxFu: 1200, percent: 64, minGpm: 150, label: "901 - 1,200 FU" },
+      { minFu: 1201, maxFu: 1500, percent: 63, minGpm: 155, label: "1,201 - 1,500 FU" },
+      { minFu: 1501, maxFu: 2000, percent: 61, minGpm: 175, label: "1,501 - 2,000 FU" },
+      { minFu: 2001, maxFu: 2500, percent: 60, minGpm: 205, label: "2,001 - 2,500 FU" },
+      { minFu: 2501, maxFu: 3000, percent: 59, minGpm: 235, label: "2,501 - 3,000 FU" },
+      { minFu: 3001, maxFu: 4000, percent: 58, minGpm: 260, label: "3,001 - 4,000 FU" },
+      { minFu: 4001, maxFu: 5000, percent: 56, minGpm: 325, label: "4,001 - 5,000 FU" },
+      { minFu: 5001, maxFu: 6000, percent: 56, minGpm: 385, label: "5,001 - 6,000 FU" },
+      { minFu: 6001, maxFu: 7000, percent: 56, minGpm: 440, label: "6,001 - 7,000 FU" },
+      { minFu: 7001, maxFu: Infinity, percent: 55, minGpm: 495, label: "7,001+ FU" },
+    ];
+
+    // ขนาดท่อมาตรฐาน (DN mm) และขนาดนิ้ว
+    const STANDARD_PIPES_MM = [15, 20, 25, 32, 40, 50, 65, 80, 100, 125, 150];
+    const PIPE_DIAMETER_INCH = { 15: "½", 20: "¾", 25: "1", 32: "1¼", 40: "1½", 50: "2", 65: "2½", 80: "3", 100: "4", 125: "5", 150: "6" };
+
+    // ตารางมอเตอร์มาตรฐาน [kW, HP]
+    const STANDARD_MOTORS = [
+      [0.18, 0.25], [0.25, 0.33], [0.37, 0.5], [0.55, 0.75], [0.75, 1.0], [1.1, 1.5], [1.5, 2.0],
+      [2.2, 3.0], [3.0, 4.0], [4.0, 5.5], [5.5, 7.5], [7.5, 10.0], [11.0, 15.0], [18.5, 25.0],
+      [22.0, 30.0], [30.0, 40.0], [37.0, 50.0], [45.0, 60.0], [55.0, 75.0], [75.0, 100.0],
+      [90.0, 125.0], [110.0, 150.0], [132.0, 175.0], [160.0, 220.0], [200.0, 270.0],
+      [220.0, 300.0], [250.0, 350.0], [280.0, 375.0], [315.0, 425.0],
+    ];
+
+    const EFFICIENCY_PROFILES = {
+      "2": [{ value: "2p_65", label: "65% / 65%", effs: [0.65, 0.65] }],
+      "3": [
+        { value: "3p_30_40_40", label: "30% / 40% / 40%", effs: [0.30, 0.40, 0.40] },
+        { value: "3p_30_70_70", label: "30% / 70% / 70%", effs: [0.30, 0.70, 0.70] },
+      ],
+    };
+
+    // =========================================================================
+    // 2. ฟังก์ชันคำนวณ
+    // =========================================================================
+
+    /** Water Factor: โรงพยาบาลใช้ตาราง 2.4, อาคารอื่นใช้ตาราง 2.5 */
+    function calculateWaterFactor(buildingId, totalFu, qmaxGpm = 0) {
+      const isHospital = String(buildingId) === "3";
+      const table = isHospital ? WATER_FACTOR_TABLE_2_4 : WATER_FACTOR_TABLE_2_5;
+      const tableName = isHospital ? "ตาราง 2.4 (โรงพยาบาล)" : "ตาราง 2.5 (ทั่วไป)";
+
+      let tier = table[table.length - 1];
+      for (const t of table) {
+        if (totalFu >= t.minFu && totalFu <= t.maxFu) { tier = t; break; }
+      }
+
+      const calculatedGpm = qmaxGpm * (tier.percent / 100.0);
+      let adjustedGpm = calculatedGpm;
+      let appliedMin = false;
+      if (tier.minGpm > 0 && calculatedGpm < tier.minGpm && qmaxGpm > 0) {
+        adjustedGpm = tier.minGpm;
+        appliedMin = true;
+      }
+
+      return {
+        isHospital, tableName,
+        tierLabel: tier.label, percent: tier.percent, minGpm: tier.minGpm,
+        calculatedGpm, adjustedGpm, appliedMin,
+        description: `${tableName} • ${tier.label}${tier.minGpm > 0 ? ` • ขั้นต่ำ ${tier.minGpm} GPM` : ""}`,
+      };
+    }
+
+    /** Hunter's Curve: หาค่า GPM จาก WSFU (interpolate เชิงเส้น) */
+    function hunterTableLookup(wsfu, hasFlushValve) {
+      const col = hasFlushValve ? 2 : 1;
+      if (wsfu <= 0) return 0;
+      if (wsfu <= HUNTER_TABLE[0][0]) return HUNTER_TABLE[0][col];
+      for (let i = 0; i < HUNTER_TABLE.length - 1; i++) {
+        const a = HUNTER_TABLE[i], b = HUNTER_TABLE[i + 1];
+        if (a[0] <= wsfu && wsfu <= b[0]) {
+          return a[col] + ((wsfu - a[0]) / (b[0] - a[0])) * (b[col] - a[col]);
+        }
+      }
+      return HUNTER_TABLE[HUNTER_TABLE.length - 1][col];
+    }
+
+    /** เลือกขนาดท่อ: เลือกท่อที่ความเร็วอยู่ในช่วง 1.2-2.4 m/s และใกล้ความเร็วเป้าหมายที่สุด */
+    function selectPipeSize(qM3s, targetVelocity) {
+      const options = STANDARD_PIPES_MM.map(mm => {
+        const dM = mm / 1000.0;
+        return { diameter_mm: mm, diameter_m: dM, velocity: qM3s / (Math.PI * dM ** 2 / 4.0) };
+      });
+      const acceptable = options.filter(p => p.velocity >= 1.2 && p.velocity <= 2.4);
+      const pool = acceptable.length > 0 ? acceptable : options;
+      const selected = pool.reduce((p, c) => Math.abs(c.velocity - targetVelocity) < Math.abs(p.velocity - targetVelocity) ? c : p);
+      return { selected, inRange: acceptable.length > 0 };
+    }
+
+    /** Hazen-Williams head loss (m) */
+    function calculateHazenWilliams(lengthM, flowM3s, diameterM, c = 130.0) {
+      if (lengthM <= 0 || diameterM <= 0 || flowM3s <= 0) return { headLossM: 0, pressureLossBar: 0 };
+      const headLossM = 10.67 * lengthM * flowM3s ** 1.85 / (c ** 1.85 * diameterM ** 4.87);
+      return { headLossM, pressureLossBar: headLossM * 0.0980665 };
+    }
+
+    function findStandardMotors(kwNeeded) {
+      let lower = null, upper = null;
+      for (const m of STANDARD_MOTORS) {
+        if (m[0] < kwNeeded) lower = m;
+        else { upper = m; break; }
+      }
+      return { lower, upper };
+    }
+
+    /** คำนวณทั้งระบบจาก input — คืนค่า null ถ้ายังไม่มีสุขภัณฑ์ */
+    function computeAll(inp) {
+      let totalWsfu = 0, ftWsfu = 0, fvWsfu = 0, fixtureCount = 0;
+      const fixtureRows = [];
+      for (const key of BUILDING_FIXTURES[inp.buildingId].keys) {
+        const f = FIXTURE_DATABASE[key];
+        const qty = inp.fixtures[key] || 0;
+        const sub = qty * f.cold_wsfu;
+        fixtureRows.push({ ...f, qty, sub });
+        if (qty > 0) {
+          totalWsfu += sub;
+          fixtureCount += qty;
+          if (f.type === "FV") fvWsfu += sub; else ftWsfu += sub;
+        }
+      }
+      if (fixtureCount <= 0) return null;
+
+      // Hunter's Curve
+      const mainType = hunterTableLookup(ftWsfu, false) >= hunterTableLookup(fvWsfu, true) ? "FT" : "FV";
+      const qmaxGpm = hunterTableLookup(totalWsfu, mainType === "FV");
+
+      // Water Factor
+      let qadjGpm, wfText;
+      if (inp.wfManual) {
+        const pct = inp.wfPercent || 100;
+        qadjGpm = qmaxGpm * pct / 100.0;
+        wfText = `Qmax ${qmaxGpm.toFixed(2)} GPM × ${pct}% (กำหนดเอง) = ${qadjGpm.toFixed(2)} GPM`;
+      } else {
+        const wf = calculateWaterFactor(inp.buildingId, totalWsfu, qmaxGpm);
+        qadjGpm = wf.adjustedGpm;
+        wfText = `${wf.tableName} [${wf.tierLabel}]: Qmax ${qmaxGpm.toFixed(2)} × ${wf.percent}% = ${wf.calculatedGpm.toFixed(2)} GPM`
+          + (wf.appliedMin ? ` → ปรับขึ้นเป็นค่าต่ำสุด ${wf.minGpm} GPM` : "");
+      }
+
+      const qtpGpm = qadjGpm;
+      const qtpLps = qadjGpm * 3.78541 / 60.0;
+      const qtpM3s = qtpLps / 1000.0;
+      const qtpLpm = qtpLps * 60.0;
+
+      // ท่อ
+      const { selected: pipe, inRange } = selectPipeSize(qtpM3s, inp.designVelocity || 1.5);
+      const { headLossM, pressureLossBar } = calculateHazenWilliams(inp.pipeLength || 80, qtpM3s, pipe.diameter_m, 130.0);
+
+      // ถังเก็บน้ำ
+      const qdAvg = (inp.users || 50) * (inp.demand || 200);
+      const vTotal = qdAvg * (inp.reserveDays || 2);
+      const rwstFactor = qtpLpm >= 380.0 ? 30 : 40;
+      let vRwst = qtpLpm * rwstFactor;
+      if (qtpLpm >= 380.0) vRwst = Math.max(vRwst, 15000.0);
+      const vUwst = Math.max(0, vTotal - vRwst);
+
+      // ปั๊มและมอเตอร์
+      const profiles = EFFICIENCY_PROFILES[inp.pumpCount];
+      const effs = (profiles.find(p => p.value === inp.effProfile) || profiles[0]).effs;
+      const tsh = (inp.dischargeHead + inp.suctionLift) - inp.suctionHead;
+      const thl = headLossM;
+      const tdh = tsh + thl;
+      const pumps = effs.map((eff, i) => {
+        const kw = (qtpLps * tdh) / (102.0 * eff);
+        return { index: i + 1, eff, kw, hp: kw / 0.746, ...findStandardMotors(kw) };
+      });
+
+      return {
+        building: BUILDING_FIXTURES[inp.buildingId], fixtureRows, fixtureCount, totalWsfu, mainType,
+        qmaxGpm, wfText, qtpGpm, qtpLps, qtpLpm,
+        pipe, inRange, headLossM, pressureLossBar,
+        users: inp.users || 50, qdAvg, vTotal, rwstFactor, vRwst, vUwst,
+        fixtureRateLpm: qtpLpm / fixtureCount,
+        tsh, thl, tdh, pumps,
+        totalKw: pumps.reduce((a, p) => a + p.kw, 0),
+        totalHp: pumps.reduce((a, p) => a + p.hp, 0),
+        inp,
+      };
+    }
+
+    // =========================================================================
+    // 3. UI
+    // =========================================================================
+    const $ = id => document.getElementById(id);
+    const fmt = (n, d = 2) => (n == null || isNaN(n)) ? "–" : Number(n).toLocaleString("th-TH", { minimumFractionDigits: d, maximumFractionDigits: d });
+    const num = el => { const v = parseFloat(el.value); return isNaN(v) ? 0 : v; };
+    const pos = (el, fallback) => { const v = parseFloat(el.value); return v > 0 ? v : fallback; };
+
+    const STORAGE_KEY = "sanitary-calc-v1";
+    const DEFAULTS = {
+      buildingId: "1", fixtures: {}, pipeLength: 80, designVelocity: 1.5, wfManual: false, wfPercent: 100,
+      users: 50, demand: 200, reserveDays: 2, pumpCount: "2", effProfile: "2p_65",
+      dischargeHead: 30, suctionHead: 2, suctionLift: 0,
+    };
+
+    const buildingSelect = $("buildingSelect");
+    const fixtureList = $("fixtureList");
+    const effSelect = $("efficiencyProfileSelect");
+    const wfManual = $("wfManual");
+    const wfInput = $("waterFactorPercent");
+
+    let fixtureQty = {}; // key -> qty
+
+    function populateBuildingSelect() {
+      buildingSelect.innerHTML = Object.entries(BUILDING_FIXTURES)
+        .map(([k, b]) => `<option value="${k}">${b.name} (${b.category})</option>`).join("");
+    }
+
+    function renderFixtures() {
+      const building = BUILDING_FIXTURES[buildingSelect.value];
+      fixtureList.innerHTML = "";
+      for (const key of building.keys) {
+        const f = FIXTURE_DATABASE[key];
+        const row = document.createElement("div");
+        row.className = "fixture";
+        row.innerHTML = `
+          <div style="min-width:0">
+            <div class="fixture-name">${f.name}</div>
+            <div class="fixture-meta"><span class="tag ${f.type === "FV" ? "tag-fv" : "tag-ft"}">${f.type}</span><span class="mono">${f.cold_wsfu.toFixed(2)} WSFU/ชิ้น</span></div>
+          </div>
+          <div class="stepper">
+            <button type="button" aria-label="ลด">−</button>
+            <input type="number" min="0" step="1" inputmode="numeric" class="mono" aria-label="จำนวน ${f.name}">
+            <button type="button" aria-label="เพิ่ม">+</button>
+          </div>`;
+        const [minus, plus] = row.querySelectorAll("button");
+        const input = row.querySelector("input");
+        const set = v => {
+          v = Math.max(0, Math.floor(v) || 0);
+          fixtureQty[key] = v;
+          input.value = v;
+          row.classList.toggle("active", v > 0);
+        };
+        set(fixtureQty[key] || 0);
+        minus.addEventListener("click", () => { set((fixtureQty[key] || 0) - 1); update(); });
+        plus.addEventListener("click", () => { set((fixtureQty[key] || 0) + 1); update(); });
+        input.addEventListener("input", () => {
+          const v = Math.max(0, Math.floor(parseFloat(input.value)) || 0);
+          fixtureQty[key] = v;
+          row.classList.toggle("active", v > 0);
+          update();
+        });
+        input.addEventListener("blur", () => set(fixtureQty[key] || 0));
+        input.addEventListener("focus", () => input.select());
+        fixtureList.appendChild(row);
+      }
+    }
+
+    function renderEffOptions(selected) {
+      const count = pumpCount();
+      effSelect.innerHTML = EFFICIENCY_PROFILES[count].map(p => `<option value="${p.value}">${p.label}</option>`).join("");
+      if (selected && EFFICIENCY_PROFILES[count].some(p => p.value === selected)) effSelect.value = selected;
+    }
+
+    const pumpCount = () => document.querySelector('input[name="pumpCount"]:checked').value;
+
+    function readInputs() {
+      const buildingId = buildingSelect.value;
+      const fixtures = {};
+      for (const k of BUILDING_FIXTURES[buildingId].keys) fixtures[k] = fixtureQty[k] || 0;
+      return {
+        buildingId, fixtures,
+        pipeLength: pos($("pipeLength"), 80),
+        designVelocity: pos($("designVelocity"), 1.5),
+        wfManual: wfManual.checked,
+        wfPercent: pos(wfInput, 100),
+        users: Math.floor(pos($("buildingUsers"), 50)),
+        demand: pos($("waterDemand"), 200),
+        reserveDays: pos($("reserveDays"), 2),
+        pumpCount: pumpCount(),
+        effProfile: effSelect.value,
+        dischargeHead: num($("dischargeHead")),
+        suctionHead: num($("suctionHead")),
+        suctionLift: num($("suctionLift")),
+      };
+    }
+
+    function applyInputs(s) {
+      buildingSelect.value = BUILDING_FIXTURES[s.buildingId] ? s.buildingId : "1";
+      fixtureQty = { ...s.fixtures };
+      renderFixtures();
+      $("pipeLength").value = s.pipeLength;
+      $("designVelocity").value = s.designVelocity;
+      wfManual.checked = !!s.wfManual;
+      wfInput.value = s.wfPercent;
+      $("buildingUsers").value = s.users;
+      $("waterDemand").value = s.demand;
+      $("reserveDays").value = s.reserveDays;
+      document.querySelector(`input[name="pumpCount"][value="${s.pumpCount === "3" ? "3" : "2"}"]`).checked = true;
+      renderEffOptions(s.effProfile);
+      $("dischargeHead").value = s.dischargeHead;
+      $("suctionHead").value = s.suctionHead;
+      $("suctionLift").value = s.suctionLift;
+    }
+
+    function save(inp) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inp)); } catch (e) {}
+    }
+    function load() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : null;
+      } catch (e) { return null; }
+    }
+
+    // ---- Main update loop ----
+    function update() {
+      const inp = readInputs();
+      save(inp);
+
+      // live fixture total + water factor (auto)
+      let pieces = 0, wsfu = 0;
+      for (const k of Object.keys(inp.fixtures)) {
+        pieces += inp.fixtures[k];
+        wsfu += inp.fixtures[k] * FIXTURE_DATABASE[k].cold_wsfu;
+      }
+      $("fixtureTotalChip").textContent = `${pieces} ชิ้น • ${wsfu.toFixed(2)} WSFU`;
+
+      const wf = calculateWaterFactor(inp.buildingId, wsfu);
+      wfInput.readOnly = !inp.wfManual;
+      if (inp.wfManual) {
+        $("wfDesc").textContent = "กำหนดค่าเอง (ไม่ใช้ค่าต่ำสุด GPM)";
+        $("wfRuleChip").textContent = "Water Factor: กำหนดเอง";
+        $("wfRuleChip").className = "chip chip-warn";
+      } else {
+        wfInput.value = wf.percent;
+        $("wfDesc").textContent = wf.description;
+        $("wfRuleChip").textContent = wf.isHospital ? "ตาราง 2.4 (โรงพยาบาล)" : "ตาราง 2.5 (ทั่วไป)";
+        $("wfRuleChip").className = "chip chip-accent";
+      }
+
+      const r = computeAll(inp);
+      renderSummary(r);
+      renderReport(r);
+    }
+
+    function renderSummary(r) {
+      $("summaryEmpty").hidden = !!r;
+      $("summaryBody").hidden = !r;
+      const status = $("summaryStatus");
+      if (!r) {
+        status.textContent = "รอข้อมูล"; status.className = "chip";
+        $("mPipe").textContent = $("mTank").textContent = $("mTdh").textContent = "–";
+        return;
+      }
+      status.textContent = r.inRange ? "ความเร็วผ่านเกณฑ์" : "ความเร็วนอกช่วง";
+      status.className = "chip " + (r.inRange ? "chip-ok" : "chip-warn");
+
+      const dn = r.pipe.diameter_mm;
+      $("sPipe").textContent = `DN ${dn}`;
+      $("sPipeInch").textContent = `(${PIPE_DIAMETER_INCH[dn]}″)`;
+      $("sVel").textContent = `${r.pipe.velocity.toFixed(2)} m/s`;
+      $("sFlow").textContent = `${r.qtpGpm.toFixed(2)} GPM • ${r.qtpLps.toFixed(2)} L/s`;
+      $("sHl").textContent = `${r.headLossM.toFixed(2)} m`;
+
+      $("sVTotal").textContent = fmt(r.vTotal / 1000);
+      const rw = r.vTotal > 0 ? Math.min(100, r.vRwst / r.vTotal * 100) : 0;
+      $("sRwstBar").style.width = rw + "%";
+      $("sUwstBar").style.width = (100 - rw) + "%";
+      $("sRwst").textContent = `${fmt(r.vRwst / 1000)} m³`;
+      $("sUwst").textContent = `${fmt(r.vUwst / 1000)} m³`;
+
+      $("sTdh").textContent = r.tdh.toFixed(2);
+      $("sPumps").innerHTML = r.pumps.map(p =>
+        `<div class="kv"><span>ปั๊ม ${p.index} (η ${(p.eff * 100).toFixed(0)}%)</span><span class="mono">${p.upper ? `${p.upper[0]} kW / ${p.upper[1]} HP` : "เกินตาราง"}</span></div>`
+      ).join("");
+
+      $("mPipe").textContent = `DN ${dn}`;
+      $("mTank").textContent = `${fmt(r.vTotal / 1000, 1)} m³`;
+      $("mTdh").textContent = `${r.tdh.toFixed(1)} m`;
+    }
+
+    function renderReport(r) {
+      $("report").hidden = !r;
+      if (!r) return;
+      const inp = r.inp;
+
+      $("rMeta").textContent = `${r.building.name} • สุขภัณฑ์ ${r.fixtureCount} ชิ้น • ผู้ใช้ ${r.users} คน`;
+
+      $("rFixtures").innerHTML = r.fixtureRows.map(f => `
+        <tr><td class="cell-title">${f.name}</td><td data-label="ระบบ"><span class="tag ${f.type === "FV" ? "tag-fv" : "tag-ft"}">${f.type}</span></td>
+        <td class="num mono" data-label="WSFU/ชิ้น">${f.cold_wsfu.toFixed(2)}</td><td class="num mono" data-label="จำนวน">${f.qty}</td><td class="num mono" data-label="WSFU รวม">${f.sub.toFixed(2)}</td></tr>`).join("");
+      $("rFixCount").textContent = r.fixtureCount;
+      $("rFixWsfu").textContent = r.totalWsfu.toFixed(2);
+
+      const param = (label, value) => `<div class="tile"><div class="t-label">${label}</div><div class="t-value mono" style="font-size:15px">${value}</div></div>`;
+      $("rParams").innerHTML = [
+        param("ความยาวท่อ L", `${inp.pipeLength} m`),
+        param("ความเร็วเป้าหมาย", `${inp.designVelocity} m/s`),
+        param("อัตราการใช้น้ำ", `${inp.demand} ล./คน/วัน`),
+        param("สำรองน้ำ", `${inp.reserveDays} วัน`),
+        param("Discharge Head", `${inp.dischargeHead} m`),
+        param("Suction Head", `${inp.suctionHead} m`),
+        param("Suction Lift", `${inp.suctionLift} m`),
+        param("จำนวนปั๊ม", `${inp.pumpCount} เครื่อง`),
+      ].join("");
+
+      // A
+      const dn = r.pipe.diameter_mm;
+      $("rWsfu").textContent = `${r.totalWsfu.toFixed(2)} FU`;
+      $("rMainType").textContent = `สุขภัณฑ์หลัก: ${r.mainType === "FV" ? "Flush Valve" : "Flush Tank"}`;
+      $("rFlowGpm").textContent = `${r.qtpGpm.toFixed(2)} GPM`;
+      $("rFlowLps").textContent = `${r.qtpLps.toFixed(3)} L/s • ${r.qtpLpm.toFixed(1)} L/min`;
+      $("rPipe").textContent = `DN ${dn} mm`;
+      $("rPipeInch").textContent = `${PIPE_DIAMETER_INCH[dn]} นิ้ว`;
+      $("rVel").textContent = `${r.pipe.velocity.toFixed(2)} m/s`;
+      $("rVelStatus").innerHTML = r.inRange
+        ? `<span style="color:var(--ok)">✓ อยู่ในช่วง 1.2–2.4 m/s</span>`
+        : `<span style="color:var(--warn)">⚠ นอกช่วง 1.2–2.4 m/s</span>`;
+      $("rWf").textContent = r.wfText;
+      $("rHl").textContent = `${r.headLossM.toFixed(2)} mH₂O`;
+      $("rPl").textContent = `${r.pressureLossBar.toFixed(3)} bar`;
+
+      // B
+      $("rQd").textContent = `${fmt(r.qdAvg / 1000)} m³/วัน`;
+      $("rQdL").textContent = `${fmt(r.qdAvg, 0)} ลิตร/วัน`;
+      $("rVt").textContent = `${fmt(r.vTotal / 1000)} m³`;
+      $("rVtL").textContent = `${fmt(r.vTotal, 0)} ลิตร`;
+      $("rVr").textContent = `${fmt(r.vRwst / 1000)} m³`;
+      $("rVrL").textContent = `${fmt(r.vRwst, 0)} ลิตร (Qtp × ${r.rwstFactor} นาที)`;
+      $("rVu").textContent = `${fmt(r.vUwst / 1000)} m³`;
+      $("rVuL").textContent = `${fmt(r.vUwst, 0)} ลิตร`;
+      const rw = r.vTotal > 0 ? Math.min(100, r.vRwst / r.vTotal * 100) : 0;
+      $("rRatio").textContent = `${rw.toFixed(1)}% / ${(100 - rw).toFixed(1)}%`;
+      $("rQtpLpm").textContent = `${r.qtpLpm.toFixed(2)} L/min (${r.qtpLps.toFixed(4)} L/s)`;
+      $("rFixRate").textContent = `${r.fixtureRateLpm.toFixed(2)} L/min ต่อชิ้น`;
+
+      // C
+      $("rTsh").textContent = `${r.tsh.toFixed(2)} m`;
+      $("rThl").textContent = `${r.thl.toFixed(2)} m`;
+      $("rTdh").textContent = `${r.tdh.toFixed(2)} m`;
+      $("rPumps").innerHTML = r.pumps.map(p => `
+        <tr>
+          <td class="cell-title" style="font-family:inherit">ปั๊ม ${p.index}</td>
+          <td class="num" data-label="Qtp">${r.qtpLps.toFixed(3)} L/s</td>
+          <td class="num" data-label="ประสิทธิภาพ η">${(p.eff * 100).toFixed(0)}%</td>
+          <td class="num" data-label="กำลังคำนวณ">${p.kw.toFixed(2)} kW (${p.hp.toFixed(2)} HP)</td>
+          <td class="num" data-label="มอเตอร์ขนาดเล็กกว่า" style="color:var(--muted)">${p.lower ? `${p.lower[0]} kW / ${p.lower[1]} HP` : "–"}</td>
+          <td class="num hl-col" data-label="มอเตอร์ที่แนะนำ">${p.upper ? `${p.upper[0]} kW / ${p.upper[1]} HP` : "เกินตาราง"}</td>
+        </tr>`).join("");
+      $("rTotalPower").textContent = `${r.totalKw.toFixed(2)} kW / ${r.totalHp.toFixed(2)} HP`;
+    }
+
+    // ---- Events ----
+    buildingSelect.addEventListener("change", () => {
+      $("waterDemand").value = BUILDING_FIXTURES[buildingSelect.value].defaultDemand;
+      renderFixtures();
+      update();
+    });
+    document.querySelectorAll('input[name="pumpCount"]').forEach(r => r.addEventListener("change", () => { renderEffOptions(); update(); }));
+    wfManual.addEventListener("change", () => { if (wfManual.checked) wfInput.focus(); update(); });
+    ["pipeLength", "designVelocity", "waterFactorPercent", "buildingUsers", "waterDemand", "reserveDays",
+     "efficiencyProfileSelect", "dischargeHead", "suctionHead", "suctionLift"]
+      .forEach(id => $(id).addEventListener("input", update));
+
+    $("resetBtn").addEventListener("click", () => {
+      if (!confirm("ล้างข้อมูลทั้งหมดและเริ่มคำนวณแปลนใหม่?")) return;
+      applyInputs(DEFAULTS);
+      update();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    $("printBtn").addEventListener("click", () => {
+      if ($("report").hidden) { alert("กรุณาเพิ่มสุขภัณฑ์อย่างน้อย 1 ชิ้นก่อนพิมพ์รายงาน"); return; }
+      window.print();
+    });
+    window.addEventListener("beforeprint", () => {
+      $("printDate").textContent = "พิมพ์เมื่อ " + new Date().toLocaleString("th-TH");
+    });
+
+    // Theme toggle (remember per browser)
+    const root = document.documentElement;
+    try { const t = localStorage.getItem("sanitary-theme"); if (t) root.dataset.theme = t; } catch (e) {}
+    $("themeBtn").addEventListener("click", () => {
+      const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+      root.dataset.theme = dark ? "light" : "dark";
+      try { localStorage.setItem("sanitary-theme", root.dataset.theme); } catch (e) {}
+    });
+
+    // ---- Init ----
+    populateBuildingSelect();
+    applyInputs(load() || DEFAULTS);
+    update();
+  </script>
+</body>
+</html>
